@@ -31,15 +31,15 @@ ORDER BY dur DESC;
 """).fetchall()
 
 # 4 - все исполнители, которые не выпустили альбомы в 2020 году
+
 connection.execute("""
-SELECT singer_name FROM singers
-WHERE singer_name != (
-    SELECT singer_name FROM singers
-    JOIN singer_album sa ON singers.id = sa.singer_id
-    JOIN albums a ON sa.album_id = a.id
-    WHERE a.year BETWEEN 2008 AND 2008
-    GROUP BY singers.id)
-GROUP BY singers.id;
+SELECT DISTINCT s.singer_name FROM singers s
+WHERE s.singer_name NOT IN (
+    SELECT DISTINCT s.singer_name FROM singers s
+    LEFT JOIN singer_album sa ON s.id = sa.singer_id
+    LEFT JOIN albums a ON sa.album_id = a.id
+    WHERE a.year = 2020)
+ORDER BY s.singer_name;
 """).fetchall()
 
 # 5 - названия сборников, в которых присутствует конкретный исполнитель (выберите сами)
@@ -67,28 +67,33 @@ HAVING COUNT(g.genre_name) > 1;
 
 # 7 - наименование треков, которые не входят в сборники
 connection.execute("""
-SELECT track_name FROM tracks t
+SELECT t.track_name FROM tracks t
 LEFT JOIN track_collection tc ON t.id = tc.track_id
-GROUP BY t.id
-HAVING COUNT(tc.collection_id) = 0;
+WHERE tc.track_id IS NULL;
 """).fetchall()
 
 # 8 - исполнителя(-ей), написавшего самый короткий по продолжительности трек (теоретически таких треков может быть несколько)
 connection.execute("""
-SELECT singer_name, track_name, duration FROM singers s
+SELECT s.singer_name, track_name, duration FROM singers s
 JOIN singer_album sa ON s.id = sa.singer_id
 JOIN albums a ON sa.album_id = a.id
 JOIN tracks t ON a.id = t.album_id
 WHERE t.duration = (
     SELECT MIN(duration) FROM tracks)
-GROUP BY s.id, t.id, t.duration;
+ORDER BY s.singer_name;
 """).fetchall()
 
 # 9 - название альбомов, содержащих наименьшее количество треков
 connection.execute("""
-SELECT album_name, COUNT(tracks.id) FROM albums
+SELECT albums.album_name, COUNT(tracks.id) FROM albums
 JOIN tracks ON albums.id = tracks.album_id
-GROUP BY albums.id
-HAVING COUNT(tracks.id) = (
-    SELECT MIN(tracks.id) FROM tracks);
+WHERE tracks.album_id IN (
+    SELECT tracks.album_id FROM tracks
+    GROUP BY tracks.album_id
+    HAVING COUNT(tracks.id) = (
+        SELECT COUNT(tracks.id) FROM tracks
+        GROUP BY tracks.album_id
+        ORDER BY COUNT(tracks.id)
+        LIMIT 1))
+GROUP BY albums.album_name;
 """).fetchall()
